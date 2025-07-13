@@ -1,0 +1,770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hospital Operations Dashboard</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&family=Poppins:wght@600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            /* New Color Theme based on the provided image */
+            --bg-color: #1a202c; 
+            --card-bg-color: #2d3748;
+            --primary-text-color: #edf2f7;
+            --secondary-text-color: #a0aec0; 
+            --border-color: #4a5568; 
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-hover: 0 10px 15px -3px rgba(0, 0, 0, 0.2), 0 4px 6px -2px rgba(0, 0, 0, 0.1);
+
+            /* Semantic Colors (Yellow/Green unchanged) */
+            --accent-yellow: #f6e05e;
+            --accent-green: #48bb78;
+
+            /* New Thematic Colors from image_600db6.png */
+            --theme-purple-dark: #5800a1;
+            --theme-purple-mid: #8452cf;
+            --theme-blue-mid: #4aa1e0;
+            --theme-cyan-bright: #63f3f4;
+            --theme-cyan-light: #a0f9fa;
+            
+            /* Legacy/Semantic variables now using new theme */
+            --accent-red: var(--theme-purple-dark); /* Red is now dark purple */
+            --accent-purple: var(--theme-purple-mid);
+            --accent-teal: var(--theme-cyan-bright);
+            --accent-blue: var(--theme-blue-mid);
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--primary-text-color);
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Critical Event Glow Effect */
+        @keyframes red-glow-animation {
+            0% { box-shadow: inset 0 0 0px 0px rgba(255, 82, 82, 0); }
+            50% { box-shadow: inset 0 0 30px 15px rgba(220, 38, 38, 0.5); }
+            100% { box-shadow: inset 0 0 0px 0px rgba(255, 82, 82, 0); }
+        }
+
+        .critical-glow {
+            animation: red-glow-animation 1s ease-in-out;
+        }
+
+
+        .header {
+            background-color: var(--card-bg-color);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .header h1 {
+            font-family: 'Poppins', sans-serif;
+            font-size: 1.75rem;
+            font-weight: 600;
+            margin: 0;
+            color: var(--primary-text-color);
+        }
+        
+        .header .logo {
+            height: 40px;
+            width: auto;
+            margin-right: 15px;
+        }
+
+        .header .time-info {
+            font-size: 0.9rem;
+            color: var(--secondary-text-color);
+        }
+
+        .dashboard-container {
+            padding: 24px;
+        }
+
+        .kpi-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .chart-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(440px, 1fr));
+            gap: 24px;
+        }
+
+        .card {
+            background-color: var(--card-bg-color);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            border: 1px solid var(--border-color);
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .chart-title {
+            font-family: 'Poppins', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 20px;
+            color: var(--primary-text-color);
+        }
+        
+        .chart-explanation {
+            font-size: 0.9rem;
+            color: var(--secondary-text-color);
+            line-height: 1.6;
+            margin-top: 20px;
+            border-top: 1px solid var(--border-color);
+            padding-top: 15px;
+        }
+        
+        .chart-explanation strong {
+            color: var(--primary-text-color);
+            font-weight: 500;
+        }
+
+        /* Tooltip */
+        .tooltip {
+            position: absolute;
+            text-align: left;
+            padding: 8px 12px;
+            font-size: 0.85rem;
+            background: rgba(26, 32, 44, 0.95);
+            color: white;
+            border-radius: 6px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            border: 1px solid var(--border-color);
+            max-width: 250px;
+        }
+        
+        .tooltip strong {
+            color: var(--accent-yellow);
+        }
+
+        /* D3 Chart Styles */
+        .axis-label { font-size: 0.8rem; fill: var(--secondary-text-color); }
+        .domain { stroke: var(--border-color); }
+        .tick line { stroke: var(--secondary-text-color); }
+        .tick text { fill: var(--secondary-text-color); font-size: 0.75rem; }
+
+        /* KPI Card Styles */
+        .kpi-card-content {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-grow: 1;
+        }
+        
+        .kpi-card-content .icon {
+            margin-right: 20px;
+            color: var(--accent-purple);
+        }
+        
+        .kpi-card-content .icon svg {
+            width: 48px;
+            height: 48px;
+        }
+
+        .kpi-card-content .text .value {
+            font-size: 2.75rem;
+            font-weight: 700;
+            line-height: 1.1;
+            color: var(--primary-text-color);
+            transition: color 0.5s ease;
+        }
+        .kpi-card-content .text .label { 
+            font-size: 0.9rem; 
+            color: var(--secondary-text-color); 
+            margin-top: 8px; 
+        }
+
+        /* List-based KPI Cards */
+        .list-kpi-card ul { list-style: none; padding: 0; margin: 0; flex-grow: 1; }
+        .list-kpi-card li { display: flex; justify-content: space-between; align-items: center; padding: 14px 8px; border-bottom: 1px solid var(--border-color); transition: background-color 0.2s; }
+        .list-kpi-card li:last-child { border-bottom: none; }
+        .list-kpi-card li:hover { background-color: #4a5568; }
+        .list-kpi-card .name { font-weight: 500; color: var(--primary-text-color); display: flex; align-items: center; }
+        .list-kpi-card .value { font-weight: 700; color: var(--secondary-text-color); display: flex; align-items: center; }
+        
+        /* Legend */
+        .legend { display: flex; justify-content: center; gap: 20px; margin-bottom: 15px; }
+        .legend-item { display: flex; align-items: center; font-size: 0.8rem; color: var(--secondary-text-color); cursor: pointer; padding: 4px 8px; border-radius: 6px; transition: background-color 0.2s; }
+        .legend-item:hover { background-color: var(--border-color); }
+        .legend-color { width: 12px; height: 12px; border-radius: 2px; margin-right: 8px; }
+
+        /* Real-Time Ops KPI */
+        .real-time-ops-content { display: flex; justify-content: space-around; align-items: center; flex-grow: 1; }
+        .tile { text-align: center; }
+        .tile .value { font-size: 2.5rem; font-weight: 700; line-height: 1.1; display: flex; align-items: center; justify-content: center; transition: color 0.5s ease; }
+        .tile .label { font-size: 0.9rem; color: var(--secondary-text-color); margin-top: 8px; }
+        .trend-arrow { font-size: 1.5rem; margin-left: 8px; }
+        .trend-up { color: var(--accent-green); }
+        .trend-down { color: var(--accent-red); } /* Now dark purple */
+        #tile-queue .value { color: var(--accent-yellow); }
+        #tile-wait .value { color: var(--accent-red); } /* Now dark purple */
+        #tile-staff .value { color: var(--theme-cyan-light); }
+
+        /* Gauge Chart */
+        .gauge-container { display: flex; justify-content: center; align-items: center; flex-grow: 1; }
+        .gauge-label { font-size: 2.75rem; font-weight: 700; fill: var(--primary-text-color); }
+
+        /* Alerts Card */
+        .alerts-list { list-style: none; padding: 0; margin: 0; flex-grow: 1; display: flex; flex-direction: column; justify-content: center; }
+        .alert-item { font-size: 1rem; font-weight: 500; padding: 12px; border-radius: 8px; margin-bottom: 10px; }
+        .alert-item:last-child { margin-bottom: 0; }
+        .alert-high { background-color: rgba(88, 0, 161, 0.3); color: #c3a4e6; } /* Dark Purple */
+        .alert-medium { background-color: rgba(132, 82, 207, 0.3); color: #d6c2ef; } /* Mid Purple */
+        
+        /* Agent List Styles */
+        .agent-list-card ul { height: 450px; overflow-y: auto; padding-right: 8px; }
+        .agent-list-card ul::-webkit-scrollbar { width: 8px; }
+        .agent-list-card ul::-webkit-scrollbar-track { background: var(--card-bg-color); border-radius: 4px; }
+        .agent-list-card ul::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 4px; }
+        .agent-list-card ul::-webkit-scrollbar-thumb:hover { background-color: var(--secondary-text-color); }
+        .agent-list-header { display: grid; grid-template-columns: 2fr 1fr 1.5fr; gap: 16px; padding: 0 8px 8px 8px; font-size: 0.8rem; font-weight: 600; color: var(--secondary-text-color); border-bottom: 2px solid var(--border-color); }
+        .agent-list-card li { padding: 12px 8px; display: block; }
+        .agent-item { display: grid; grid-template-columns: 2fr 1fr 1.5fr; gap: 16px; align-items: center; }
+        .agent-item .value, .agent-item .department { font-size: 0.9rem; color: var(--secondary-text-color); }
+        .agent-status { height: 10px; width: 10px; border-radius: 50%; margin-right: 10px; }
+        .agent-status.available { background-color: var(--accent-green); }
+        .agent-status.on-call { background-color: var(--accent-yellow); }
+
+        /* Doctor Availability List Styles */
+        #doctor-availability-list { max-height: 350px; overflow-y: auto; padding-right: 8px; }
+         #doctor-availability-list::-webkit-scrollbar { width: 8px; }
+         #doctor-availability-list::-webkit-scrollbar-track { background: var(--card-bg-color); border-radius: 4px; }
+         #doctor-availability-list::-webkit-scrollbar-thumb { background-color: var(--border-color); border-radius: 4px; }
+         #doctor-availability-list::-webkit-scrollbar-thumb:hover { background-color: var(--secondary-text-color); }
+        .doctor-list-header { display: grid; grid-template-columns: 2.5fr 1.5fr 1fr 1fr; gap: 16px; width: 100%; padding: 0 8px 8px 0; font-size: 0.8rem; font-weight: 600; color: var(--secondary-text-color); border-bottom: 2px solid var(--border-color); margin-bottom: 4px; }
+        .doctor-list-header .label { text-align: center; }
+        .doctor-list-header .label-start { text-align: left; }
+        #doctor-availability-list li { padding: 12px 8px 12px 0; }
+        .doctor-item { display: grid; grid-template-columns: 2.5fr 1.5fr 1fr 1fr; gap: 16px; width: 100%; align-items: center; font-size: 0.9rem; }
+        .doctor-item .name { font-weight: 500; color: var(--primary-text-color); }
+        .doctor-item .department { color: var(--secondary-text-color); }
+        .doctor-item .appointments { text-align: center; font-weight: 700; color: var(--primary-text-color); }
+        .doctor-item .appointments .label { display: block; font-size: 0.7rem; color: var(--secondary-text-color); font-weight: 400; margin-top: 4px; }
+        
+        /* Styles for newer charts */
+        #agent-status-donut-chart .center-text, #call-resolution-chart .tick text { font-family: 'Poppins', sans-serif; }
+        #agent-leaderboard-chart .tick text, #call-resolution-chart .tick text { fill: var(--primary-text-color); }
+        .chart-controls { display: flex; justify-content: center; gap: 10px; margin-bottom: 15px; }
+        .control-btn { background-color: transparent; border: 1px solid var(--border-color); color: var(--secondary-text-color); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-family: 'Roboto', sans-serif; font-weight: 500; font-size: 0.8rem; transition: background-color 0.2s, color 0.2s; }
+        .control-btn:hover { background-color: var(--border-color); color: var(--primary-text-color); }
+        .control-btn.active { background-color: var(--theme-cyan-bright); color: var(--bg-color); border-color: var(--theme-cyan-bright); }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div style="display: flex; align-items: center;">
+            <img class="logo" src="download.jpg" alt="Wise Staffing Logo">
+            <h1>Smart Staffing</h1>
+        </div>
+        <div class="time-info" id="time-info"></div>
+    </div>
+
+    <div class="dashboard-container">
+        <div class="kpi-row">
+            <div class="card kpi-info-card" data-tooltip="Shows the total number of scheduled patient appointments for the day across all departments.">
+                <div class="kpi-card-content"> <div class="icon"> <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg> </div> <div class="text"> <div class="value" id="total-appointments">0</div> <div class="label">Total Appointments</div> </div> </div>
+            </div>
+            <div class="card kpi-info-card" data-tooltip="The number of patient appointments currently in progress.">
+                <div class="kpi-card-content"> <div class="icon"> <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.657 7.343A8 8 0 0117.657 18.657z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.5 16.5l-1.5 1.5"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12.5 13.5l-1.5 1.5"></path></svg> </div> <div class="text"> <div class="value" id="ongoing-appointments">0</div> <div class="label">Ongoing Appointments</div> </div> </div>
+            </div>
+            <div class="card kpi-info-card" data-tooltip="The calculated number of additional agents required to meet current demand and SLA targets.">
+                <div class="kpi-card-content"> <div class="icon"> <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" /></svg> </div> <div class="text"> <div class="value" id="agent-shortfall">0</div> <div class="label">Agent Shortfall</div> </div> </div>
+            </div>
+            <div class="card kpi-info-card" data-tooltip="Predicted call volume for the next 30 minutes, with a recommendation for the number of agents needed.">
+                <div class="kpi-card-content"> <div class="icon"> <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z"></path></svg> </div> <div class="text"> <div class="value" id="next-forecast-value">0</div> <div class="label" id="next-forecast-label">Next 30min Forecast</div> </div> </div>
+            </div>
+        </div>
+
+        <div class="kpi-row">
+            <div class="card kpi-info-card" data-tooltip="Live snapshot of key call center metrics: calls waiting in queue, average wait time, and number of agents online.">
+                <div class="chart-title">Real-Time Operations</div>
+                <div class="real-time-ops-content"> <div class="tile" id="tile-queue"><div class="value">0</div><div class="label">In Queue</div></div> <div class="tile" id="tile-wait"><div class="value">0s</div><div class="label">Avg. Wait</div></div> <div class="tile" id="tile-staff"><div class="value">0</div><div class="label">Agents</div></div> </div>
+            </div>
+            <div class="card kpi-info-card" data-tooltip="Service Level Agreement (SLA) Compliance: Measures the percentage of calls answered within the target time.">
+                <div class="chart-title">SLA Compliance</div>
+                <div class="gauge-container"> <svg id="sla-gauge-container" width="250" height="120"></svg> </div>
+            </div>
+            <div class="card kpi-info-card" data-tooltip="Displays critical and medium-priority alerts that require immediate attention.">
+                <div class="chart-title">Priority Alerts</div>
+                <ul class="alerts-list" id="alerts-list"> </ul>
+            </div>
+        </div>
+        
+        <div class="chart-grid">
+            <div class="card list-kpi-card"> <div class="chart-title">Appointment Slots by Sector</div> <ul id="appointment-slots"></ul> </div>
+            <div class="card"> <div class="chart-title">Doctor Availability & Schedules</div> <div class="doctor-list-header"> <span class="label-start">Doctor</span> <span class="label-start">Department</span> <span class="label">Total Slots</span> <span class="label">Available Slots</span> </div> <ul id="doctor-availability-list" class="list-kpi-card"> </ul> </div>
+            <div class="card list-kpi-card agent-list-card"> <div class="chart-title">Currently Working Agents</div> <div class="agent-list-header"> <span>Agent</span> <span>Status</span> <span>Department</span> </div> <ul id="agent-list"></ul> </div>
+            <div class="card"> <div class="chart-title">Specialist Agent Availability</div> <div class="legend" id="legend8"></div> <div id="chart8-container"></div> <div class="chart-explanation"> This chart highlights the availability of specialist agents versus the required number. It helps in immediately identifying staffing shortages in critical skill areas. </div> </div>
+            <div class="card"> <div class="chart-title">Predicted vs. Actual Call Volumes</div> <div class="legend" id="legend1"></div> <div id="chart1-container"></div> <div class="chart-explanation"> This chart compares predicted call volumes against actual numbers, helping evaluate forecasting accuracy and optimize staff scheduling. Hover over the chart or legend to focus on a series. </div> </div>
+            <div class="card"> <div class="chart-title">Staff Efficiency: Calls vs. Staffing</div> <div class="legend" id="legend3"></div> <div id="chart3-container"></div> <div class="chart-explanation"> These gauges show the average call volume and staffing levels for the day, providing a clear view of overall load and resource allocation. </div> </div>
+            <div class="card"> <div class="chart-title">Live Agent Status</div> <div id="agent-status-donut-chart" style="min-height: 250px;"></div> <div class="chart-explanation"> This chart shows the real-time distribution of all active agents by their current status. Hover over a slice for details. </div> </div>
+            <div class="card"> <div class="chart-title">Agent Performance Leaderboard</div> <div class="chart-controls"> <button id="sort-by-calls" class="control-btn active">Sort by Calls Handled</button> <button id="sort-by-time" class="control-btn">Sort by Avg. Handle Time</button> </div> <div id="agent-leaderboard-chart" style="min-height: 300px;"></div> <div class="chart-explanation"> This chart ranks active agents by performance. Use the buttons to change the ranking metric. Hover over a bar for more details. </div> </div>
+            <div class="card"> <div class="chart-title">First Call Resolution Rate by Department</div> <div class="legend" id="call-resolution-legend"></div> <div id="call-resolution-chart" style="min-height: 300px;"></div> <div class="chart-explanation"> This chart shows the percentage of calls resolved on first contact. A higher 'Resolved' bar indicates better departmental efficiency. </div> </div>
+        </div>
+    </div>
+
+    <div class="tooltip"></div>
+
+<script>
+// --- Master Data ---
+const doctorMasterList = [
+    { name: 'Dr. Evelyn Reed', specialty: 'Cardiology' }, { name: 'Dr. Marcus Thorne', specialty: 'Cardiology' }, { name: 'Dr. Anya Sharma', specialty: 'Cardiology' },
+    { name: 'Dr. Julian Alvarez', specialty: 'Orthopedics' }, { name: 'Dr. Kenji Tanaka', specialty: 'Orthopedics' },
+    { name: 'Dr. Sofia Rossi', specialty: 'Neurology' }, { name: 'Dr. David Chen', specialty: 'Neurology' },
+    { name: 'Dr. Isabelle Laurent', specialty: 'Pediatrics' }, { name: 'Dr. Omar Badawi', specialty: 'Pediatrics' }, { name: 'Dr. Chloe Wilson', specialty: 'Pediatrics' },
+    { name: 'Dr. Ben Carter', specialty: 'General Medicine' }, { name: 'Dr. Hannah Garcia', specialty: 'General Medicine' }, { name: 'Dr. Liam Johnson', specialty: 'General Medicine' }
+];
+
+const agentMasterList = [
+    { name: 'Alice', department: 'Billing' }, { name: 'Ben', department: 'General' }, { name: 'Clara', department: 'Emergency' }, { name: 'David', department: 'Language' },
+    { name: 'Eva', department: 'General' }, { name: 'Frank', department: 'Billing' }, { name: 'Grace', department: 'General' }, { name: 'Henry', department: 'Language' },
+    { name: 'Isla', department: 'Emergency' }, { name: 'Jack', department: 'General' }, { name: 'Kate', department: 'Billing' }, { name: 'Leo', department: 'General' },
+    { name: 'Mia', department: 'General' }, { name: 'Noah', department: 'Emergency' }, { name: 'Olivia', department: 'Language' }, { name: 'Paul', department: 'Billing' },
+    { name: 'Quinn', department: 'General' }, { name: 'Ruby', department: 'General' }, { name: 'Sam', department: 'Billing' }, { name: 'Tara', department: 'Emergency' },
+    { name: 'Umar', department: 'Language' }, { name: 'Vera', department: 'General' }, { name: 'Will', department: 'Billing' }, { name: 'Xena', department: 'General' },
+    { name: 'Yara', department: 'Emergency' }, { name: 'Zane', department: 'Language' }, { name: 'Alex', department: 'General' }, { name: 'Brooke', department: 'Billing' },
+    { name: 'Chris', department: 'General' }, { name: 'Diana', department: 'Emergency' }, { name: 'Ethan', department: 'Language' }, { name: 'Fiona', department: 'General' },
+    { name: 'Gus', department: 'Billing' }, { name: 'Hope', department: 'General' }, { name: 'Ivan', department: 'Emergency' }, { name: 'Jen', department: 'Language' },
+];
+
+// --- Dynamic Chart Data (Initialized) ---
+let chart1Data = [{h:8,p:55,a:52},{h:9,p:60,a:65},{h:10,p:75,a:72},{h:11,p:70,a:78},{h:12,p:65,a:60},{h:13,p:80,a:85},{h:14,p:90,a:88},{h:15,p:85,a:92}];
+let chart3Data = [{h:8,v:300,s:40},{h:9,v:450,s:45},{h:10,v:500,s:50},{h:11,v:480,s:50},{h:12,v:350,s:40},{h:13,v:250,s:35},{h:14,v:280,s:35}];
+let chart8Data = [{t:"Billing",a:8,r:10},{t:"General",a:15,r:12},{t:"Emergency",a:5,r:8},{t:"Language",a:3,r:5}];
+
+
+document.addEventListener('DOMContentLoaded', function() {
+    // --- General Setup ---
+    const tooltip = d3.select(".tooltip");
+    
+    function updateTime() { document.getElementById('time-info').innerHTML = `Live Data: ${new Date().toLocaleString()}`; }
+    updateTime();
+    setInterval(updateTime, 1000);
+
+    // --- Legends ---
+    function createLegend(containerId, items) {
+        const legendContainer = d3.select(`#${containerId}`);
+        legendContainer.selectAll("*").remove();
+        items.forEach(item => {
+            const legendItem = legendContainer.append("div").attr("class", "legend-item");
+            legendItem.append("div").attr("class", "legend-color").style("background-color", item.color);
+            legendItem.append("span").text(item.text);
+        });
+        return legendContainer;
+    }
+    
+    // --- KPI Card Tooltips ---
+    d3.selectAll('.kpi-info-card').on('mouseover', function(event) { tooltip.style('opacity', 1); }).on('mousemove', function(event) { const tooltipText = d3.select(this).attr('data-tooltip'); tooltip.html(tooltipText).style("left", (event.pageX + 15) + "px").style("top", (event.pageY - 28) + "px"); }).on('mouseleave', function(event) { tooltip.style('opacity', 0); });
+
+    // --- State Variables ---
+    let lastOpsKpi = { queue: 0, wait: 0 };
+    let lastSlaValue = 0;
+    let agentPerformanceData = []; 
+
+    // --- Setup Dynamic Elements ---
+    const gauge = (function() {
+        const container = d3.select("#sla-gauge-container");
+        const width = 250, height = 120, margin = 10;
+        const radius = Math.min(width, height * 2) / 2 - margin;
+        const svg = container.append("g").attr("transform", `translate(${width/2}, ${height - margin/2})`);
+        const arc = d3.arc().innerRadius(radius - 20).outerRadius(radius - 5).startAngle(-Math.PI / 2).cornerRadius(10);
+        svg.append("path").datum({endAngle: Math.PI / 2}).style("fill", "#4a5568").attr("d", arc);
+        const foreground = svg.append("path").datum({endAngle: -Math.PI / 2}).style("fill", "var(--accent-green)").attr("d", arc);
+        const text = svg.append("text").attr("class", "gauge-label").attr("text-anchor", "middle").attr("dy", "-0.3em").text("0%");
+        return { foreground, text, arc };
+    })();
+
+    // --- KPI Update Functions ---
+    function updateAllKPIs() {
+        const animateCounter = (id, endValue) => {
+            d3.select(id).transition().duration(750).tween("text", function() {
+                const startValue = parseInt(this.textContent.replace(/,/g, '')) || 0;
+                const i = d3.interpolate(startValue, endValue);
+                return function(t) { this.textContent = Math.round(i(t)).toLocaleString(); };
+            });
+        };
+        
+        animateCounter('#ongoing-appointments', Math.floor(Math.random() * 20) + 15);
+       
+        const sectors = [ { name: 'Cardiology', slots: Math.floor(Math.random() * 5) + 2 }, { name: 'Orthopedics', slots: Math.floor(Math.random() * 8) }, { name: 'Neurology', slots: Math.floor(Math.random() * 4) + 1 }, { name: 'Pediatrics', slots: Math.floor(Math.random() * 10) + 5 }, { name: 'General Medicine', slots: Math.floor(Math.random() * 12) + 8 } ];
+        d3.select('#appointment-slots').selectAll('li').data(sectors, d => d.name).join( enter => enter.append('li').html(d => `<span class="name">${d.name}</span><span class="value">${d.slots} Available</span>`).style('opacity', 0).transition().duration(500).style('opacity', 1), update => update.select('.value').text(d => `${d.slots} Available`) );
+            
+        let totalAppointmentsSum = 0;
+        let doctorsData = [];
+        sectors.forEach(sector => {
+            const doctorsInSector = doctorMasterList.filter(d => d.specialty === sector.name);
+            let slotsToDistribute = sector.slots;
+            if (doctorsInSector.length > 0 && slotsToDistribute > 0) {
+                const shuffledDoctors = [...doctorsInSector].sort(() => 0.5 - Math.random());
+                shuffledDoctors.forEach((doctor, index) => {
+                    let assignedSlots = (slotsToDistribute > 0) ? (index === shuffledDoctors.length - 1) ? slotsToDistribute : Math.floor(Math.random() * (slotsToDistribute / 2 + 1)) : 0;
+                    slotsToDistribute -= assignedSlots;
+                    const totalForDoctor = assignedSlots + Math.floor(Math.random() * 8) + 4;
+                    totalAppointmentsSum += totalForDoctor;
+                    if (assignedSlots > 0) doctorsData.push({ name: doctor.name, department: doctor.specialty, available: assignedSlots, total: totalForDoctor });
+                });
+            }
+        });
+        animateCounter('#total-appointments', totalAppointmentsSum);
+
+        d3.select('#doctor-availability-list').selectAll('li').data(doctorsData.sort((a,b) => b.available - a.available), d => d.name).join( enter => enter.append('li').html(d => `<div class="doctor-item"><span class="name">${d.name}</span><span class="department">${d.department}</span><span class="appointments">${d.total}<span class="label">Total</span></span><span class="appointments" style="color: var(--theme-cyan-bright);">${d.available}<span class="label">Available</span></span></div>`).style('opacity', 0).transition().duration(500).style('opacity', 1), update => update.html(d => `<div class="doctor-item"><span class="name">${d.name}</span><span class="department">${d.department}</span><span class="appointments">${d.total}<span class="label">Total</span></span><span class="appointments" style="color: var(--theme-cyan-bright);">${d.available}<span class="label">Available</span></span></div>`), exit => exit.transition().duration(500).style('opacity', 0).remove() );
+
+        // AGENT DATA GENERATION
+        const agentStatusData = [ { key: "Available", value: Math.floor(Math.random() * 18) + 8 }, { key: "On Call", value: Math.floor(Math.random() * 12) + 5 }, { key: "After Call Work", value: Math.floor(Math.random() * 8) + 2 }, { key: "On Break", value: Math.floor(Math.random() * 5) + 1 } ];
+        const totalAgents = d3.sum(agentStatusData, d => d.value);
+
+        // Real-Time Operations KPI
+        const opsKpi = { queue: Math.floor(Math.random() * 35) + 5, wait: Math.floor(Math.random() * 110) + 20, staff: totalAgents };
+        
+        const updateTileWithTrend = (id, value, lastValue, suffix = '') => { const elem = d3.select(id); const trendArrow = lastValue !== undefined ? `<span class="trend-arrow ${value > lastValue ? 'trend-up' : 'trend-down'}">${value > lastValue ? '▲' : '▼'}</span>` : ''; elem.select('.value').html(`${value}${suffix} ${trendArrow}`); };
+        updateTileWithTrend('#tile-queue', opsKpi.queue, lastOpsKpi.queue);
+        updateTileWithTrend('#tile-staff', opsKpi.staff);
+
+        const waitValueElement = d3.select('#tile-wait .value');
+        waitValueElement.text(`${opsKpi.wait}s`);
+        waitValueElement.style('color', opsKpi.wait < 60 ? 'var(--accent-green)' : 'var(--accent-red)'); // Uses dark purple
+        
+        lastOpsKpi = { queue: opsKpi.queue, wait: opsKpi.wait };
+        
+        // SLA Compliance Update
+        const newSlaValue = d3.scaleLinear().domain([120, 50]).range([0.75, 0.98]).clamp(true)(opsKpi.wait);
+        const colorScaleSLA = d3.scaleLinear().domain([0.8, 0.9, 1]).range(['var(--theme-purple-dark)', 'var(--theme-purple-mid)', 'var(--theme-cyan-bright)']); // New Theme
+        const angleScale = d3.scaleLinear().domain([0, 1]).range([-Math.PI / 2, Math.PI / 2]);
+
+        gauge.foreground.transition().duration(1500).style("fill", colorScaleSLA(newSlaValue)).attrTween("d", d => { const i = d3.interpolate(angleScale(lastSlaValue), angleScale(newSlaValue)); return t => { d.endAngle = i(t); return gauge.arc(d); }; });
+        gauge.text.transition().duration(1500).tween("text", function() { const i = d3.interpolate(lastSlaValue * 100, newSlaValue * 100); return function(t) { this.textContent = i(t).toFixed(0) + "%"; }; });
+        lastSlaValue = newSlaValue;
+        
+        // --- Generate Data for Formerly Static Charts ---
+        chart8Data.forEach(d => { d.a = Math.max(0, d.a + Math.round((Math.random() - 0.5) * 4)); if (d.a > d.r + 5) d.a = d.r + 5; });
+        chart1Data.forEach(d => { d.a = Math.max(20, d.p + (Math.random() - 0.5) * 35); });
+        chart3Data.forEach(d => { d.v = Math.max(150, d.v + (Math.random() - 0.5) * 60); d.s = Math.max(25, d.s + (Math.random() - 0.5) * 6); });
+
+        // Agent Shortfall Calculation
+        const totalRequired = Math.ceil(opsKpi.queue / 2.0) + (newSlaValue < 0.85 ? 4 : 0) + (opsKpi.wait > 90 ? 3 : 0) + ((chart8Data.find(d => d.t === 'Emergency').a < chart8Data.find(d => d.t === 'Emergency').r) ? 5 : 0);
+        const shortfall = Math.max(0, Math.floor(totalRequired - opsKpi.staff));
+        animateCounter('#agent-shortfall', shortfall);
+        d3.select('#agent-shortfall').style('color', shortfall > 5 ? 'var(--accent-red)' : shortfall > 0 ? 'var(--accent-purple)' : 'var(--theme-cyan-light)');
+        
+        // Next 30min Forecast
+        const futureCalls = Math.floor(Math.random() * 40) + opsKpi.queue;
+        const recommendedAgents = Math.ceil(futureCalls / 6) + 5;
+        animateCounter('#next-forecast-value', futureCalls);
+        d3.select('#next-forecast-label').text(`Predicted Calls (Rec. ${recommendedAgents} Agents)`);
+
+        // Priority Alerts
+        const alerts = [];
+        if (shortfall > 5) alerts.push({type: 'high', text: `Critical Agent Shortfall: ${shortfall} needed`});
+        else if (shortfall > 0) alerts.push({type: 'medium', text: `Agent Shortfall: ${shortfall} needed`});
+        if (opsKpi.wait > 90) alerts.push({type: 'high', text: 'High Wait Times Detected!'});
+        if (chart8Data.find(d => d.t === 'Emergency').a < chart8Data.find(d => d.t === 'Emergency').r) alerts.push({type: 'high', text: 'Emergency Specialist Shortage!'});
+        
+        const alertContainer = d3.select("#alerts-list");
+        alertContainer.selectAll("*").remove();
+        if (alerts.length === 0) { alertContainer.append("li").attr("class", "alert-item").style('background-color', 'rgba(99, 243, 244, 0.2)').style('color', 'var(--theme-cyan-light)').text('All Systems Normal'); } else { alerts.forEach(alert => { alertContainer.append("li").attr("class", `alert-item alert-${alert.type}`).text(alert.text); }); }
+
+        // --- Handle Critical Event Glow ---
+        const isCritical = alerts.some(alert => alert.type === 'high');
+        if (isCritical) {
+            const body = d3.select("body");
+            body.classed("critical-glow", true);
+            setTimeout(() => {
+                body.classed("critical-glow", false);
+            }, 1000); // Animation duration is 1 second
+        }
+
+        // Agent List
+        const workingAgents = agentMasterList.slice(0, opsKpi.staff).map(agent => ({...agent, status: ["Available", "On Call"][Math.floor(Math.random() * 2)]}));
+        d3.select("#agent-list").selectAll('li').data(workingAgents, d => d.name).join( enter => enter.append('li').html(d => `<div class="agent-item"><span class="name"><span class="agent-status ${d.status.toLowerCase().replace(' ', '-')}"></span>${d.name}</span><span class="value">${d.status}</span><span class="department">${d.department}</span></div>`).style('opacity', 0).transition().duration(500).style('opacity', 1), update => update.html(d => `<div class="agent-item"><span class="name"><span class="agent-status ${d.status.toLowerCase().replace(' ', '-')}"></span>${d.name}</span><span class="value">${d.status}</span><span class="department">${d.department}</span></div>`), exit => exit.transition().duration(500).style('opacity', 0).remove() );
+
+        // --- UPDATE ALL CHARTS ---
+        updatePredictedVsActualChart(chart1Data);
+        updateEfficiencyGauges(chart3Data);
+        updateSpecialistChart(chart8Data);
+        updateDonut(agentStatusData);
+        agentPerformanceData = workingAgents.map(agent => ({ name: agent.name, department: agent.department, callsHandled: Math.floor(Math.random() * 40) + 10, avgHandleTime: Math.floor(Math.random() * 150) + 90 }));
+        updateLeaderboard(); 
+        const resolutionData = sectors.map(d => ({ department: d.name, resolved: Math.floor(Math.random() * 40) + 50, followup: Math.floor(Math.random() * 15) + 5, }));
+        updateCallResolution(resolutionData);
+    }
+    
+    // --- Chart 1: Predicted vs. Actual Call Volumes ---
+    const updatePredictedVsActualChart = (function() {
+        const chartColors = { actual: 'var(--theme-purple-mid)', predicted: 'var(--theme-cyan-bright)' };
+        createLegend('legend1', [ { color: chartColors.actual, text: 'Actual Calls' }, { color: chartColors.predicted, text: 'Predicted Calls' } ]);
+        const margin = {top: 5, right: 20, bottom: 40, left: 40}, width = 480 - margin.left - margin.right, height = 250 - margin.top - margin.bottom;
+        const svg = d3.select("#chart1-container").append("svg").attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`).append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+        
+        const x = d3.scaleLinear().range([0, width]);
+        const y = d3.scaleLinear().range([height, 0]);
+
+        const xAxis = svg.append("g").attr("transform", `translate(0,${height})`);
+        const yAxis = svg.append("g");
+        
+        const areaPredicted = d3.area().x(d => x(d.h)).y0(height).y1(d => y(d.p)).curve(d3.curveMonotoneX);
+        const areaActual = d3.area().x(d => x(d.h)).y0(height).y1(d => y(d.a)).curve(d3.curveMonotoneX);
+
+        const predictedPath = svg.append("path").attr("fill", chartColors.predicted).attr("fill-opacity", 0.7);
+        const actualPath = svg.append("path").attr("fill", chartColors.actual).attr("fill-opacity", 0.6);
+
+        return function update(data) {
+            x.domain(d3.extent(data, d => d.h));
+            y.domain([0, d3.max(data, d => Math.max(d.a, d.p)) * 1.1]);
+
+            xAxis.transition().duration(750).call(d3.axisBottom(x).ticks(data.length).tickFormat(d => `${d}:00`));
+            yAxis.transition().duration(750).call(d3.axisLeft(y).ticks(6));
+
+            predictedPath.datum(data).transition().duration(750).attr("d", areaPredicted);
+            actualPath.datum(data).transition().duration(750).attr("d", areaActual);
+
+            // Add tooltip areas
+            const xBand = d3.scaleBand().domain(data.map(d => d.h)).range([0, width]);
+            const tooltipRects = svg.selectAll(".tooltip-rect").data(data);
+            
+            tooltipRects.enter().append("rect")
+                .attr("class", "tooltip-rect")
+                .attr("fill", "transparent")
+                .merge(tooltipRects)
+                .attr("x", d => xBand(d.h))
+                .attr("y", 0)
+                .attr("width", xBand.bandwidth())
+                .attr("height", height)
+                .on('mouseover', (event, d) => {
+                    tooltip.style('opacity', 1).html(`<strong>${d.h}:00</strong><br><span style="color:${chartColors.predicted}">Predicted:</span> ${d.p}<br><span style="color:${chartColors.actual}">Actual:</span> ${d.a}`);
+                })
+                .on('mousemove', (event) => tooltip.style("left", (event.pageX + 15) + "px").style("top", (event.pageY - 28) + "px"))
+                .on('mouseout', () => tooltip.style('opacity', 0));
+        };
+    })();
+    
+    // --- Chart 3: Staff Efficiency (Dual Gauge) ---
+    const updateEfficiencyGauges = (function() {
+        d3.select('#legend3').selectAll("*").remove();
+        const container = d3.select("#chart3-container");
+        const totalWidth = 480, totalHeight = 250, margin = {top: 20, right: 20, bottom: 50, left: 20};
+        const svg = container.append("svg").attr("viewBox", `0 0 ${totalWidth} ${totalHeight}`).append("g").attr("transform", `translate(${margin.left}, ${margin.top})`);
+        const gaugeWidth = (totalWidth - margin.left - margin.right) / 2, gaugeHeight = totalHeight - margin.top - margin.bottom;
+        
+        let lastAvgVolume = 0, lastAvgStaff = 0;
+
+        function createGauge(parent, data) {
+            const { title, color } = data;
+            const radius = Math.min(gaugeWidth / 2, gaugeHeight) - 15, thickness = 25;
+            const arc = d3.arc().innerRadius(radius - thickness).outerRadius(radius).startAngle(-Math.PI / 2).cornerRadius(10);
+            parent.append("path").datum({ endAngle: Math.PI / 2 }).style("fill", "var(--border-color)").attr("d", arc);
+            const foreground = parent.append("path").datum({ endAngle: -Math.PI / 2 }).style("fill", color).attr("d", arc);
+            const textValue = parent.append("text").attr("text-anchor", "middle").attr("dy", "-0.1em").style("font-size", "2rem").style("font-weight", "700").style("fill", color).text("0");
+            parent.append("text").attr("text-anchor", "middle").attr("dy", "1.5em").style("font-size", "0.9rem").style("fill", "var(--secondary-text-color)").text(title);
+            return { foreground, textValue, arc };
+        }
+
+        const volumeGroup = svg.append("g").attr("transform", `translate(${gaugeWidth / 2}, ${gaugeHeight / 1.4})`);
+        const staffGroup = svg.append("g").attr("transform", `translate(${gaugeWidth * 1.5}, ${gaugeHeight / 1.4})`);
+
+        const volumeGauge = createGauge(volumeGroup, { title: "Avg. Call Volume", color: "var(--theme-purple-mid)" });
+        const staffGauge = createGauge(staffGroup, { title: "Avg. Staffing", color: "var(--theme-cyan-bright)" });
+
+        return function update(data) {
+            const avgVolume = d3.mean(data, d => d.v);
+            const maxVolume = d3.max(data, d => d.v) || avgVolume;
+            const avgStaff = d3.mean(data, d => d.s);
+            const maxStaff = d3.max(data, d => d.s) || avgStaff;
+            
+            const angleScaleVolume = d3.scaleLinear().domain([0, maxVolume * 1.1]).range([-Math.PI / 2, Math.PI / 2]).clamp(true);
+            const angleScaleStaff = d3.scaleLinear().domain([0, maxStaff * 1.1]).range([-Math.PI / 2, Math.PI / 2]).clamp(true);
+
+            volumeGauge.foreground.transition().duration(1500).ease(d3.easeCubicOut).attrTween("d", d => { const i = d3.interpolate(angleScaleVolume(lastAvgVolume), angleScaleVolume(avgVolume)); return t => { d.endAngle = i(t); return volumeGauge.arc(d); }; });
+            volumeGauge.textValue.transition().duration(1500).ease(d3.easeCubicOut).tween("text", function() { const i = d3.interpolate(lastAvgVolume, avgVolume); return function(t) { this.textContent = Math.round(i(t)); }; });
+            
+            staffGauge.foreground.transition().duration(1500).ease(d3.easeCubicOut).attrTween("d", d => { const i = d3.interpolate(angleScaleStaff(lastAvgStaff), angleScaleStaff(avgStaff)); return t => { d.endAngle = i(t); return staffGauge.arc(d); }; });
+            staffGauge.textValue.transition().duration(1500).ease(d3.easeCubicOut).tween("text", function() { const i = d3.interpolate(lastAvgStaff, avgStaff); return function(t) { this.textContent = Math.round(i(t)); }; });
+
+            volumeGroup.on('mouseover', () => tooltip.style('opacity', 1).html(`<strong>Avg. Call Volume</strong><br>Current: ${Math.round(avgVolume)}`)).on('mousemove', (e) => tooltip.style("left", (e.pageX + 15) + "px").style("top", (e.pageY - 28) + "px")).on('mouseout', () => tooltip.style('opacity', 0));
+            staffGroup.on('mouseover', () => tooltip.style('opacity', 1).html(`<strong>Avg. Staffing</strong><br>Current: ${Math.round(avgStaff)}`)).on('mousemove', (e) => tooltip.style("left", (e.pageX + 15) + "px").style("top", (e.pageY - 28) + "px")).on('mouseout', () => tooltip.style('opacity', 0));
+
+            lastAvgVolume = avgVolume;
+            lastAvgStaff = avgStaff;
+        };
+    })();
+    
+    // --- Chart 8: Specialist Agent Availability (Grouped Bar Chart) ---
+    const updateSpecialistChart = (function() {
+        createLegend('legend8', [{ color: 'var(--theme-purple-mid)', text: 'Required' }, { color: 'var(--theme-cyan-bright)', text: 'Available' }]);
+        const margin = {top: 5, right: 20, bottom: 40, left: 50}, width = 480 - margin.left - margin.right, height = 250 - margin.top - margin.bottom;
+        const svg = d3.select("#chart8-container").append("svg").attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`).append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+        
+        const x0 = d3.scaleBand().range([0, width]).padding(0.2);
+        const x1 = d3.scaleBand().padding(0.05);
+        const y = d3.scaleLinear().range([height, 0]);
+        const color = d3.scaleOrdinal().domain(['required', 'available']).range(['var(--theme-purple-mid)', 'var(--theme-cyan-bright)']);
+
+        const xAxis = svg.append("g").attr("transform", `translate(0,${height})`);
+        const yAxis = svg.append("g");
+
+        return function update(data) {
+            const groups = data.map(d => d.t);
+            const subgroups = ['required', 'available'];
+
+            x0.domain(groups);
+            x1.domain(subgroups).range([0, x0.bandwidth()]);
+            y.domain([0, d3.max(data, d => Math.max(d.r, d.a)) * 1.2 || 10]);
+
+            xAxis.transition().duration(750).call(d3.axisBottom(x0));
+            yAxis.transition().duration(750).call(d3.axisLeft(y));
+
+            const slice = svg.selectAll(".slice").data(data, d => d.t);
+            const sliceEnter = slice.enter().append("g").attr("class", "slice");
+            
+            slice.merge(sliceEnter)
+                .transition().duration(750)
+                .attr("transform", d => `translate(${x0(d.t)},0)`);
+
+            slice.exit().remove();
+            
+            const bars = slice.merge(sliceEnter).selectAll("rect")
+                .data(d => [{key:'required', value: d.r, category: d.t}, {key:'available', value: d.a, category: d.t}]);
+
+            bars.enter().append("rect")
+                .attr("fill", d => color(d.key))
+                .attr("x", d => x1(d.key))
+                .attr("width", x1.bandwidth())
+                .attr("y", y(0))
+                .attr("height", 0)
+                .merge(bars)
+                .on('mouseover', (event, d) => {
+                    tooltip.style('opacity', 1)
+                        .html(`<strong>${d.category}</strong><br><span style="color:${color(d.key)}; text-transform: capitalize;">${d.key}:</span> ${d.value}`);
+                })
+                .on('mousemove', (event) => tooltip.style("left", (event.pageX + 15) + "px").style("top", (event.pageY - 28) + "px"))
+                .on('mouseout', () => tooltip.style('opacity', 0))
+                .transition().duration(750)
+                .attr("x", d => x1(d.key))
+                .attr("width", x1.bandwidth())
+                .attr("y", d => y(d.value))
+                .attr("height", d => height - y(d.value));
+
+            bars.exit().remove();
+        };
+    })();
+
+    // --- Chart: Agent Status Donut ---
+    const updateDonut = (function() {
+        const margin = {top: 10, right: 10, bottom: 10, left: 10}, container = d3.select("#agent-status-donut-chart"), w = container.node().getBoundingClientRect().width, h = 250, width = w - margin.left - margin.right, height = h - margin.top - margin.bottom, radius = Math.min(width, height) / 2 - 20;
+        const svg = container.append("svg").attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`).append("g").attr("transform", `translate(${(width / 2) + margin.left}, ${(height / 2) + margin.top})`);
+        const color = d3.scaleOrdinal().domain(["Available", "On Call", "After Call Work", "On Break"]).range(['var(--theme-cyan-bright)', 'var(--theme-cyan-light)', 'var(--theme-purple-mid)', 'var(--theme-purple-dark)']); 
+        const pie = d3.pie().value(d => d.value).sort(null);
+        const arc = d3.arc().innerRadius(radius * 0.6).outerRadius(radius);
+        const centerTextValue = svg.append('text').attr('class', 'center-text').attr('text-anchor', 'middle').attr('dy', '-0.2em').style('font-size', '2.5rem').style('font-weight', '700').style('fill', 'var(--primary-text-color)');
+        svg.append('text').attr('class', 'center-text').attr('text-anchor', 'middle').attr('dy', '1.2em').style('font-size', '0.9rem').style('fill', 'var(--secondary-text-color)').text('Total Agents');
+        return function update(agentData) {
+            const data_ready = pie(agentData), totalAgents = d3.sum(agentData, d => d.value);
+            const paths = svg.selectAll('path').data(data_ready, d => d.data.key);
+            paths.enter().append('path').attr('fill', d => color(d.data.key)).attr('stroke', 'var(--card-bg-color)').style('stroke-width', '2px').each(function(d) { this._current = { startAngle: d.endAngle, endAngle: d.endAngle }; }).merge(paths)
+                .on('mouseover', function(event, d) { d3.select(this).transition().duration(200).attr('transform', 'scale(1.05)'); tooltip.style('opacity', 1).html(`<strong>${d.data.key}</strong><br>${d.data.value} Agents (${((d.data.value / totalAgents) * 100).toFixed(1)}%)`); })
+                .on('mousemove', (e) => tooltip.style("left", (e.pageX + 15) + "px").style("top", (e.pageY - 28) + "px"))
+                .on('mouseout', function(d) { d3.select(this).transition().duration(200).attr('transform', 'scale(1)'); tooltip.style('opacity', 0); })
+                .transition().duration(1000).attrTween('d', function(d) { const interpolate = d3.interpolate(this._current, d); this._current = interpolate(0); return function(t) { return arc(interpolate(t)); }; });
+            paths.exit().transition().duration(1000).attrTween('d', function(d) { const interpolate = d3.interpolate(this._current, { startAngle: this._current.endAngle, endAngle: this._current.endAngle }); return t => arc(interpolate(t)); }).remove();
+            centerTextValue.transition().duration(1000).tween("text", function() { const i = d3.interpolate(parseInt(this.textContent) || 0, totalAgents); return t => { this.textContent = Math.round(i(t)); }; });
+        }
+    })();
+    
+    // --- Chart: Agent Performance Leaderboard ---
+    const updateLeaderboard = (function() {
+        let currentMetric = 'callsHandled'; 
+        const container = d3.select("#agent-leaderboard-chart"), margin = {top: 5, right: 30, bottom: 20, left: 70}, w = container.node().getBoundingClientRect().width, h = 320, width = w - margin.left - margin.right, height = h - margin.top - margin.bottom;
+        const svg = container.append("svg").attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`).append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+        const x = d3.scaleLinear().range([0, width]);
+        const y = d3.scaleBand().range([0, height]).padding(0.15);
+        const deptColors = d3.scaleOrdinal().domain(["Billing", "General", "Emergency", "Language"]).range(['var(--theme-purple-mid)', 'var(--theme-cyan-bright)', 'var(--theme-purple-dark)', 'var(--theme-blue-mid)']);
+        const xAxis = svg.append("g").attr("class", "x-axis").attr("transform", `translate(0,${height})`);
+        const yAxis = svg.append("g").attr("class", "y-axis");
+        d3.select("#sort-by-calls").on('click', () => { currentMetric = 'callsHandled'; update(); });
+        d3.select("#sort-by-time").on('click', () => { currentMetric = 'avgHandleTime'; update(); });
+        function update() {
+            if (agentPerformanceData.length === 0) return;
+            d3.select("#sort-by-calls").classed('active', currentMetric === 'callsHandled');
+            d3.select("#sort-by-time").classed('active', currentMetric === 'avgHandleTime');
+            agentPerformanceData.sort((a, b) => currentMetric === 'callsHandled' ? b.callsHandled - a.callsHandled : a.avgHandleTime - b.avgHandleTime);
+            x.domain([0, d3.max(agentPerformanceData, d => d[currentMetric])]);
+            y.domain(agentPerformanceData.map(d => d.name));
+            xAxis.transition().duration(750).call(d3.axisBottom(x).ticks(5).tickSizeOuter(0));
+            yAxis.transition().duration(750).call(d3.axisLeft(y).tickSize(0)).select(".domain").remove();
+            const bars = svg.selectAll('.bar').data(agentPerformanceData, d => d.name);
+            bars.enter().append('rect').attr('class', 'bar').attr('y', d => y(d.name)).attr('height', y.bandwidth()).attr('x', 0).attr('width', 0)
+                .merge(bars).attr('fill', d => deptColors(d.department))
+                .on('mouseover', (e, d) => { tooltip.style('opacity', 1).html(`<strong>${d.name} (${d.department})</strong><br>Calls: ${d.callsHandled}<br>Avg Time: ${d.avgHandleTime}s`); })
+                .on('mousemove', (e) => tooltip.style("left", (e.pageX + 15) + "px").style("top", (e.pageY - 28) + "px"))
+                .on('mouseout', () => tooltip.style('opacity', 0))
+                .transition().duration(750).attr('y', d => y(d.name)).attr('width', d => x(d[currentMetric]));
+            bars.exit().transition().duration(750).attr('width', 0).remove();
+        }
+        return update;
+    })();
+
+    // --- Chart: Call Resolution Rate ---
+    const updateCallResolution = (function() {
+        createLegend('call-resolution-legend', [ { color: 'var(--theme-cyan-bright)', text: 'Resolved' }, { color: 'var(--theme-purple-mid)', text: 'Requires Follow-up' } ]);
+        const container = d3.select("#call-resolution-chart"), margin = {top: 5, right: 30, bottom: 20, left: 110}, w = container.node().getBoundingClientRect().width, h = 320, width = w - margin.left - margin.right, height = h - margin.top - margin.bottom;
+        const svg = container.append("svg").attr("viewBox", `0 0 ${width + margin.left + margin.right} ${height + margin.top + margin.bottom}`).append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+        const y = d3.scaleBand().range([0, height]).padding(0.2);
+        const x = d3.scaleLinear().range([0, width]);
+        const color = d3.scaleOrdinal().domain(['resolved', 'followup']).range(['var(--theme-cyan-bright)', 'var(--theme-purple-mid)']);
+        const xAxis = svg.append("g").attr("class", "x-axis").attr("transform", `translate(0,${height})`);
+        const yAxis = svg.append("g").attr("class", "y-axis");
+        return function update(data) {
+            data.forEach(d => { d.total = d.resolved + d.followup; });
+            const keys = ['resolved', 'followup'];
+            const stackedData = d3.stack().keys(keys)(data);
+            y.domain(data.map(d => d.department));
+            x.domain([0, 100]);
+            xAxis.transition().duration(750).call(d3.axisBottom(x).ticks(5).tickFormat(d => `${d}%`));
+            yAxis.transition().duration(750).call(d3.axisLeft(y).tickSize(0)).select(".domain").remove();
+            const group = svg.selectAll("g.layer").data(stackedData, d => d.key);
+            group.enter().append("g").attr("class", "layer").attr("fill", d => color(d.key));
+            const bars = svg.selectAll("g.layer").selectAll("rect").data(d => d, d => d.data.department);
+            bars.enter().append("rect").attr("y", d => y(d.data.department)).attr("height", y.bandwidth()).attr("x", d => x(0)).attr("width", 0)
+                .merge(bars)
+                .on('mouseover', (e, d) => { const key = d3.select(e.target.parentNode).datum().key; const value = d.data[key]; const percent = (value / d.data.total * 100).toFixed(1); tooltip.style('opacity', 1).html(`<strong>${d.data.department}</strong><br>${key.charAt(0).toUpperCase() + key.slice(1)}: ${value} calls (${percent}%)`); })
+                .on('mousemove', (e) => tooltip.style("left", (e.pageX + 15) + "px").style("top", (e.pageY - 28) + "px"))
+                .on('mouseout', () => tooltip.style('opacity', 0))
+                .transition().duration(750).attr("y", d => y(d.data.department))
+                .attr("x", d => x(d[0] / d.data.total * 100))
+                .attr("width", d => x(d[1] / d.data.total * 100) - x(d[0] / d.data.total * 100));
+            bars.exit().remove();
+        }
+    })();
+    
+    // --- Initial Data Load & Set Interval ---
+    updateAllKPIs(); 
+    setInterval(updateAllKPIs, 10000);
+});
+</script>
+</body>
+</html>
